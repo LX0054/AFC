@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>MENÚ Las Afortunadas Café - Bebidas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: "#1565c0",    // 蓝色主色
+            accent1: "#64b5f6",    // 辅助浅蓝（hover）
+            accent2: "#e3f2fd",    // 背景淡蓝
+            itemName: "#42a5f5",   // 菜名辅助色
+            itemDesc: "#616161"    // 描述灰色
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    html { scroll-behavior: smooth; }
+  </style>
+</head>
+<body class="bg-accent2 min-h-screen relative">
+  <!-- 顶部导航 -->
+  <nav class="bg-primary text-white fixed top-0 left-0 right-0 shadow z-50">
+    <div class="max-w-5xl mx-auto flex items-center justify-between px-4 py-3 overflow-x-auto whitespace-nowrap">
+      <span class="font-bold text-xl flex-shrink-0">MENÚ Las Afortunadas Café - Bebidas</span>
+      <div id="navLinks" class="flex gap-4 text-sm font-medium"></div>
+    </div>
+  </nav>
+
+  <div class="max-w-4xl mx-auto pt-24 px-4">
+    <!-- 菜单内容 -->
+    <div id="menuContainer" class="space-y-12"></div>
+  </div>
+
+  <!-- 返回顶部按钮 -->
+  <button id="backTop" class="fixed bottom-6 right-4 bg-primary text-white p-3 rounded-full shadow-lg hidden hover:bg-accent1 transition">
+    ↑
+  </button>
+
+  <script>
+    const backTop = document.getElementById('backTop');
+    window.addEventListener('scroll', () => {
+      if(window.scrollY > 200) backTop.classList.remove('hidden');
+      else backTop.classList.add('hidden');
+    });
+    backTop.addEventListener('click', () => window.scrollTo({top:0, behavior:'smooth'}));
+
+    // CSV 链接
+    const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vREo530Y8rLxhopVn6cTp3yBGmHQaWRN1szPxxDpRvzSRo9G6ioQ_FakQmlSZSBuy7wWsgve5wU75mE/pub?gid=91201887&single=true&output=csv";
+
+    const cacheKey = "drinksCSVCache";      // 独立缓存 key
+    const cacheTimeKey = "drinksCSVCacheTime";
+    const cacheDuration = 1000 * 60 * 60;   // 1 小时
+
+    const cachedTime = localStorage.getItem(cacheTimeKey);
+    const now = Date.now();
+
+    if(cachedTime && now - cachedTime < cacheDuration) {
+      const cachedCSV = localStorage.getItem(cacheKey);
+      if(cachedCSV) {
+        Papa.parse(cachedCSV, { header:false, skipEmptyLines:true, complete: results => renderMenu(results.data) });
+      } else {
+        fetchAndCache();
+      }
+    } else {
+      fetchAndCache();
+    }
+
+    function fetchAndCache() {
+      fetch(csvUrl)
+        .then(res => res.text())
+        .then(csvText => {
+          localStorage.setItem(cacheKey, csvText);
+          localStorage.setItem(cacheTimeKey, Date.now());
+          Papa.parse(csvText, { header:false, skipEmptyLines:true, complete: results => renderMenu(results.data) });
+        })
+        .catch(err => console.error("CSV 加载失败:", err));
+    }
+
+    function renderMenu(data) {
+      const container = document.getElementById("menuContainer");
+      const nav = document.getElementById("navLinks");
+      container.innerHTML = "";
+      nav.innerHTML = "";
+
+      const grouped = {};
+      data.forEach(row => {
+        const [category, name, desc, price] = row;
+        if(!price) return; // 忽略无价格
+        if(!grouped[category]) grouped[category] = [];
+        grouped[category].push({
+          name: name?.trim() || "",
+          desc: desc?.trim() || "",
+          price: price.trim().replace(/"/g,"") + " €"
+        });
+      });
+
+      for(const category in grouped) {
+        const section = document.createElement("div");
+        section.className = "bg-white shadow-lg rounded-2xl p-5 border-l-4 border-primary";
+        section.id = category.replace(/\s+/g,"-");
+
+        const title = document.createElement("h2");
+        title.className = "text-2xl font-semibold mb-6 text-primary";
+        title.textContent = category;
+        section.appendChild(title);
+
+        grouped[category].forEach(item => {
+          const block = document.createElement("div");
+          block.className = "mb-6 pb-4 border-b border-accent2 last:border-b-0";
+
+          const header = document.createElement("div");
+          header.className = "flex justify-between font-bold text-lg";
+          header.innerHTML = `
+            <span class="text-itemName">${escapeHTML(item.name)}</span>
+            <span class="text-primary">${escapeHTML(item.price)}</span>
+          `;
+
+          const desc = document.createElement("div");
+          desc.className = "text-itemDesc text-sm mt-2 italic";
+          desc.textContent = item.desc || "—";
+
+          block.appendChild(header);
+          block.appendChild(desc);
+          section.appendChild(block);
+        });
+
+        container.appendChild(section);
+
+        const link = document.createElement("a");
+        link.href = "#" + section.id;
+        link.className = "hover:text-accent1 transition flex-shrink-0";
+        link.textContent = category;
+        nav.appendChild(link);
+      }
+    }
+
+    function escapeHTML(str) {
+      return str.replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));
+    }
+  </script>
+</body>
+</html>
